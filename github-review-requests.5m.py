@@ -88,6 +88,9 @@ query = """{
               url
               commit {
                 oid
+                status {
+                  state
+                }
               }
             }
           }
@@ -140,7 +143,7 @@ def search_pull_requests(login, filters=""):
 
 
 def search_my_pull_requests(login, filters=""):
-    search_query = "type:pr state:open author:%(login)s %(filters)s" % {
+    search_query = "type:pr state:open assignee:%(login)s %(filters)s" % {
         "login": login,
         "filters": filters,
     }
@@ -191,12 +194,16 @@ def _print_response(response):
             for review_node in pr["reviews"]["nodes"]
             if review_node["author"]["login"] != GITHUB_LOGIN
         )
+        statuses = filter(None, [n["commit"]["status"] for n in pr["commits"]["nodes"]])
+        failed = any(status for status in statuses if status["state"] == "FAILURE")
 
         labels = [l["name"] for l in pr["labels"]["nodes"]]
         extra = u"🏓" if _is_approved(pr) else u""
         title = u"%s - %s %s" % (pr["repository"]["nameWithOwner"], pr["title"], extra)
         if has_activity:
             title = title + u" 🔸"
+        if failed:
+            title = title + u" 🔺"
 
         title_color = colors.get("inactive" if WIP_LABEL in labels else "title")
         subtitle = "#%s opened on %s by @%s" % (
