@@ -1,4 +1,4 @@
-#!/usr/bin/env -S PATH="${PATH}:/usr/local/opt/python@3.8/bin" python3
+#!/usr/bin/env -S PATH="${PATH}:/usr/local/opt/python@3.8/bin" python3.8
 # -*- coding: utf-8 -*-
 
 # What's in my GitHub queue?
@@ -196,6 +196,7 @@ def _print_response(response):
         )
         statuses = filter(None, [n["commit"]["status"] for n in pr["commits"]["nodes"]])
         failed = any(status for status in statuses if status["state"] == "FAILURE")
+        pending = any(status for status in statuses if status["state"] == "PENDING")
 
         labels = [l["name"] for l in pr["labels"]["nodes"]]
         extra = u"🏓" if _is_approved(pr) else u""
@@ -204,6 +205,8 @@ def _print_response(response):
             title = title + u" 🔸"
         if failed:
             title = title + u" 🔺"
+        if pending:
+            title = title + u" ▫️"
 
         title_color = colors.get("inactive" if WIP_LABEL in labels else "title")
         subtitle = "#%s opened on %s by @%s" % (
@@ -227,7 +230,8 @@ if __name__ == "__main__":
 
     review_needed = search_pull_requests(GITHUB_LOGIN, FILTERS)
     mine, approved = search_my_pull_requests(GITHUB_LOGIN, FILTERS)
+    total = review_needed["issueCount"] + mine["issueCount"]
 
-    _summary(str(review_needed["issueCount"]), approved)
+    _summary(str(total), approved)
     _print_response(mine)
     _print_response(review_needed)

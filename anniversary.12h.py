@@ -46,7 +46,7 @@ def print_line(text, **kwargs):
 
 if __name__ == "__main__":
     this_year = datetime.datetime.now().year
-    anniversary = datetime.date(this_year, 3, 15)
+    anniversary = datetime.date(2020, 11, 3)
     delta = (anniversary - datetime.datetime.today().date()).days
     sym = u"Δ"
     if delta < 5 or 0 == delta % 5:
