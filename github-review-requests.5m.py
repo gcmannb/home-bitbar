@@ -99,6 +99,7 @@ query = """{
           }
           createdAt
           number
+          isDraft
           url
           title
           labels(first:100) {
@@ -209,10 +210,11 @@ def _print_response(response):
             title = title + u" ▫️"
 
         title_color = colors.get("inactive" if WIP_LABEL in labels else "title")
-        subtitle = "#%s opened on %s by @%s" % (
+        subtitle = "#%s opened on %s by @%s%s" % (
             pr["number"],
             parse_date(pr["createdAt"]),
             pr["author"]["login"],
+            " (DRAFT)" if pr["isDraft"] else u"",
         )
         subtitle_color = colors.get("inactive" if WIP_LABEL in labels else "subtitle")
 

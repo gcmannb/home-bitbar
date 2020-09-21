@@ -72,7 +72,7 @@ def print_line(text, **kwargs):
 
 
 def _summarize(builds):
-    build_count = len(builds)
+    build_count = len([b for b in builds if b["status"] == "running"])
     print_line(u"🚧 %(build_count)s" % {"build_count": build_count})
     print_line("---")
 
@@ -84,7 +84,7 @@ def _print_details(builds):
             args = dict(**b)
             args["job_name"] = b["workflows"]["job_name"]
             args["outcome"] = _map_outcome(args["outcome"])
-            print_line(u"  %(job_name)s: %(status)s %(outcome)s" % args, trim=False)
+            print_line(u"  %(job_name)s: %(status)s %(outcome)s" % args, trim=False, href=args["build_url"])
         print_line("---")
 
 
