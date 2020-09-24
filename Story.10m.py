@@ -67,12 +67,18 @@ def execute_query():
 def find_stories():
     return [
         {
-            "name": "%s: %s" % (story["key"], story["fields"]["summary"]),
+            "name": "%s: %s %s" % (story["key"], story["fields"]["summary"], _sprints(story)),
             "status": story["fields"]["status"]["name"],
             "href": JIRA_BASE_URL + "/browse/%s" % story["key"],
         }
         for story in execute_query()["issues"]
     ]
+
+
+def _sprints(story):
+    names = sorted([f["name"] for f in (story["fields"]["customfield_10600"] or [])])
+    sprints = ' '.join(names[-1:])
+    return "(%s)" % sprints if len(names) else ""
 
 
 def print_line(text, **kwargs):
