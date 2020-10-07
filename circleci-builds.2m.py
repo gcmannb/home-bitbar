@@ -14,7 +14,7 @@
 # <bitbar.image></bitbar.image>
 # <bitbar.dependencies>python</bitbar.dependencies>
 
-import datetime
+from datetime import datetime
 import json
 import os
 import sys
@@ -78,15 +78,20 @@ def _summarize(builds):
 
 
 def _print_details(builds):
-    for branch, grouping in groupby(builds, key=lambda i: i["branch"]):
+    for branch, branch_grouping in _sorted_then_grouped(builds, key=lambda i: i["branch"]):
         print_line(branch)
-        for b in sorted(list(grouping), key=lambda i: i["workflows"]["job_name"]):
-            args = dict(**b)
-            args["job_name"] = b["workflows"]["job_name"]
-            args["outcome"] = _map_outcome(args["outcome"])
-            print_line(u"  %(job_name)s: %(status)s %(outcome)s" % args, trim=False, href=args["build_url"])
+        for job, job_grouping in _sorted_then_grouped(branch_grouping, key=lambda i: i["workflows"]["job_name"]):
+            for b in sorted(job_grouping, reverse=True, key=lambda i: i["committer_date"])[0:1]:
+                args = dict(**b)
+                args["job_name"] = b["workflows"]["job_name"]
+                args["outcome"] = _map_outcome(args["outcome"])
+                args["ago"] = pretty_date(b["committer_date"])
+                print_line(u"  %(job_name)s: %(status)s %(outcome)s %(ago)s" % args, trim=False, href=args["build_url"])
         print_line("---")
 
+
+def _sorted_then_grouped(items, key=None):
+    return groupby(sorted(list(items), key=key), key=key)
 
 def _map_outcome(status):
     if status == "success":
@@ -94,6 +99,39 @@ def _map_outcome(status):
     if status == "failed":
         return u"❌"
     return status
+
+def pretty_date(time_str=False):
+    time = datetime.fromisoformat(time_str[:-1])
+    now = datetime.now()
+    diff = now - time
+    second_diff = diff.seconds
+    day_diff = diff.days
+
+    if day_diff < 0:
+        return ''
+
+    if day_diff == 0:
+        if second_diff < 10:
+            return "just now"
+        if second_diff < 60:
+            return f"{second_diff} seconds ago"
+        if second_diff < 120:
+            return "a minute ago"
+        if second_diff < 3600:
+            return str(second_diff / 60) + " minutes ago"
+        if second_diff < 7200:
+            return "an hour ago"
+        if second_diff < 86400:
+            return f"{second_diff / 3600:0.0f} hours ago"
+    if day_diff == 1:
+        return "yesterday"
+    if day_diff < 7:
+        return str(day_diff) + " days ago"
+    if day_diff < 31:
+        return str(day_diff / 7) + " weeks ago"
+    if day_diff < 365:
+        return str(day_diff / 30) + " months ago"
+    return str(day_diff / 365) + " years ago"
 
 
 if __name__ == "__main__":
