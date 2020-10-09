@@ -3,11 +3,9 @@
 
 # What's building in Circle
 #
-# Show how many items with links to them.  Plus indicate whether
-# something looks like it is in my court
 
-# <bitbar.title>Github review requests</bitbar.title>
-# <bitbar.desc>Shows a list of PRs that need to be reviewed</bitbar.desc>
+# <bitbar.title>CircleCI status</bitbar.title>
+# <bitbar.desc>Shows a list of builds in CircleCI</bitbar.desc>
 # <bitbar.version>v0.1</bitbar.version>
 # <bitbar.author></bitbar.author>
 # <bitbar.author.github></bitbar.author.github>
@@ -81,11 +79,11 @@ def _print_details(builds):
     for branch, branch_grouping in _sorted_then_grouped(builds, key=lambda i: i["branch"]):
         print_line(branch)
         for job, job_grouping in _sorted_then_grouped(branch_grouping, key=lambda i: i["workflows"]["job_name"]):
-            for b in sorted(job_grouping, reverse=True, key=lambda i: i["committer_date"])[0:1]:
+            for b in sorted(job_grouping, reverse=True, key=lambda i: (i.get("committer_date") or ""))[0:1]:
                 args = dict(**b)
                 args["job_name"] = b["workflows"]["job_name"]
                 args["outcome"] = _map_outcome(args["outcome"])
-                args["ago"] = pretty_date(b["committer_date"])
+                args["ago"] = pretty_date(b.get("committer_date"))
                 print_line(u"  %(job_name)s: %(status)s %(outcome)s %(ago)s" % args, trim=False, href=args["build_url"])
         print_line("---")
 
@@ -101,6 +99,9 @@ def _map_outcome(status):
     return status
 
 def pretty_date(time_str=False):
+    if time_str is None:
+        return ''
+
     time = datetime.fromisoformat(time_str[:-1])
     now = datetime.now()
     diff = now - time
