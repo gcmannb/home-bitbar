@@ -77,6 +77,7 @@ def _summarize(builds):
 
 def _print_details(builds):
     for branch, branch_grouping in _sorted_then_grouped(builds, key=lambda i: i["branch"]):
+        print_line(branch_grouping[0]["reponame"].upper(), size=10)
         print_line(branch)
         for job, job_grouping in _sorted_then_grouped(branch_grouping, key=lambda i: i["workflows"]["job_name"]):
             for b in sorted(job_grouping, reverse=True, key=lambda i: (i.get("committer_date") or ""))[0:1]:
@@ -89,7 +90,7 @@ def _print_details(builds):
 
 
 def _sorted_then_grouped(items, key=None):
-    return groupby(sorted(list(items), key=key), key=key)
+    return [(k, list(g)) for k, g in groupby(sorted(list(items), key=key), key=key)]
 
 def _map_outcome(status):
     if status == "success":

@@ -102,6 +102,8 @@ query = """{
           isDraft
           url
           title
+          headRefName
+          mergeable
           labels(first:100) {
             nodes {
               name
@@ -209,12 +211,16 @@ def _print_response(response):
         if pending:
             title = title + u" ▫️"
 
+        merge_status = u" ⚡️" if pr["mergeable"] == "CONFLICTING" else ""
+
         title_color = colors.get("inactive" if WIP_LABEL in labels else "title")
-        subtitle = "#%s opened on %s by @%s%s" % (
+        subtitle = "#%s opened on %s by @%s%s — %s%s" % (
             pr["number"],
             parse_date(pr["createdAt"]),
             pr["author"]["login"],
             " (DRAFT)" if pr["isDraft"] else u"",
+            pr["headRefName"],
+            merge_status,
         )
         subtitle_color = colors.get("inactive" if WIP_LABEL in labels else "subtitle")
 
