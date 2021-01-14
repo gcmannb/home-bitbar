@@ -68,7 +68,7 @@ query = """{
           repository {
             nameWithOwner
           }
-          reviews(last: 3){
+          reviews(last: 10){
             nodes {
               id
               state
@@ -189,44 +189,76 @@ def _summary(issue_count, mine_approved):
     print_line("---")
 
 
-def _print_response(response):
-    for pr in [r["node"] for r in response["edges"]]:
-        # Have there been comments on this PR (that aren't from me)?
-        has_activity = any(
-            review_node
-            for review_node in pr["reviews"]["nodes"]
-            if review_node["author"]["login"] != GITHUB_LOGIN
-        )
-        statuses = filter(None, [n["commit"]["status"] for n in pr["commits"]["nodes"]])
-        failed = any(status for status in statuses if status["state"] == "FAILURE")
-        pending = any(status for status in statuses if status["state"] == "PENDING")
+class PR:
+    def __init__(self, title=None, subtitle=None, in_outbox=None, url=None):
+        self.title = title
+        self.subtitle = subtitle
+        self.in_outbox = in_outbox
+        self.url = url
 
-        labels = [l["name"] for l in pr["labels"]["nodes"]]
-        extra = u"🏓" if _is_approved(pr) else u""
-        title = u"%s - %s %s" % (pr["repository"]["nameWithOwner"], pr["title"], extra)
-        if has_activity:
-            title = title + u" 🔸"
-        if failed:
-            title = title + u" 🔺"
-        if pending:
-            title = title + u" ▫️"
-
-        merge_status = u" ⚡️" if pr["mergeable"] == "CONFLICTING" else ""
-
-        title_color = colors.get("inactive" if WIP_LABEL in labels else "title")
-        subtitle = "#%s opened on %s by @%s%s — %s%s" % (
-            pr["number"],
-            parse_date(pr["createdAt"]),
-            pr["author"]["login"],
-            " (DRAFT)" if pr["isDraft"] else u"",
-            pr["headRefName"],
-            merge_status,
-        )
-        subtitle_color = colors.get("inactive" if WIP_LABEL in labels else "subtitle")
-
-        print_line(title, size=16, color=title_color, href=pr["url"])
-        print_line(subtitle, size=12, color=subtitle_color)
+    def print_it(self, prefix=""):
+        print_line(prefix + self.title, size=16, href=self.url)
+        print_line(prefix + self.subtitle, size=12)
         print_line("---")
+
+
+def _annotate_pr(pr) -> PR:
+    # Have there been comments on this PR (that aren't from me)?
+    has_activity = any(
+        review_node
+        for review_node in pr["reviews"]["nodes"]
+        if review_node["author"]["login"] != GITHUB_LOGIN
+    )
+    #
+    in_outbox = any(
+        review_node
+        for review_node in pr["reviews"]["nodes"]
+        if review_node["author"]["login"] == GITHUB_LOGIN
+    )
+    statuses = filter(None, [n["commit"]["status"] for n in pr["commits"]["nodes"]])
+    failed = any(status for status in statuses if status["state"] == "FAILURE")
+    pending = any(status for status in statuses if status["state"] == "PENDING")
+
+    labels = [l["name"] for l in pr["labels"]["nodes"]]
+    title_color = colors.get("inactive" if WIP_LABEL in labels else "title")
+    subtitle_color = colors.get("inactive" if WIP_LABEL in labels else "subtitle")
+
+    extra = u"🏓" if _is_approved(pr) else u""
+    title = u"%s - %s %s" % (pr["repository"]["nameWithOwner"], pr["title"], extra)
+    if has_activity:
+        title = title + u" 🔸"
+    if failed:
+        title = title + u" 🔺"
+    if pending:
+        title = title + u" ▫️"
+
+    merge_status = u" ⚡️" if pr["mergeable"] == "CONFLICTING" else ""
+    subtitle = "#%s opened on %s by @%s%s — %s%s" % (
+        pr["number"],
+        parse_date(pr["createdAt"]),
+        pr["author"]["login"],
+        " (DRAFT)" if pr["isDraft"] else u"",
+        pr["headRefName"],
+        merge_status,
+    )
+    return PR(title, subtitle, in_outbox, pr["url"])
+
+
+def _print_response(response):
+    outbox = []
+    for pr in [r["node"] for r in response["edges"]]:
+        my = _annotate_pr(pr)
+
+        if not my.in_outbox:
+            my.print_it()
+        else:
+            outbox.append(my)
+
+    if any(outbox):
+        print_line("Outbox")
+
+    for my in outbox:
+        my.print_it("--")
 
 
 if __name__ == "__main__":
