@@ -20,6 +20,7 @@ import os
 import sys
 import codecs
 import locale
+from typing import List, Tuple
 
 
 # ----------------------
@@ -136,25 +137,25 @@ def execute_query(query):
     return json.loads(body)
 
 
-def search_pull_requests(login, filters=""):
+def search_pull_requests(login, filters="") -> List["PR"]:
     search_query = "type:pr state:open review-requested:%(login)s %(filters)s" % {
         "login": login,
         "filters": filters,
     }
     response = execute_query(query % {"search_query": search_query})
-    return response["data"]["search"]
+    return _prs(response)
 
 
-def search_outbox_pull_requests(login, filters=""):
+def search_outbox_pull_requests(login, filters="") -> List["PR"]:
     search_query = "type:pr state:open reviewed-by:%(login)s %(filters)s" % {
         "login": login,
         "filters": filters,
     }
     response = execute_query(query % {"search_query": search_query})
-    return response["data"]["search"]
+    return _prs(response)
 
 
-def search_my_pull_requests(login, filters=""):
+def search_my_pull_requests(login, filters="") -> Tuple[List["PR"], bool]:
     search_query = "type:pr state:open assignee:%(login)s %(filters)s" % {
         "login": login,
         "filters": filters,
@@ -167,7 +168,7 @@ def search_my_pull_requests(login, filters=""):
         # Consider it my court if the PR's latest commit has a review
         approved = approved or _is_approved(pr)
 
-    return response["data"]["search"], approved
+    return _prs(response), approved
 
 
 def parse_date(text):
@@ -253,11 +254,13 @@ def _annotate_pr(pr) -> PR:
     return PR(title, subtitle, in_outbox, pr["url"])
 
 
-def _print_response(response):
-    outbox = []
-    for pr in [r["node"] for r in response["edges"]]:
-        my = _annotate_pr(pr)
+def _prs(response):
+    return [_annotate_pr(r["node"]) for r in response["data"]["search"]["edges"]]
 
+
+def _print_prs(items: List[PR]):
+    outbox = []
+    for my in items:
         if not my.in_outbox:
             my.print_it()
         else:
@@ -277,12 +280,9 @@ if __name__ == "__main__":
         print_line("ACCESS_TOKEN and GITHUB_LOGIN cannot be empty")
         sys.exit(0)
 
-    review_needed = search_pull_requests(GITHUB_LOGIN, FILTERS)
-    review_completed = search_outbox_pull_requests(GITHUB_LOGIN, FILTERS)
     mine, approved = search_my_pull_requests(GITHUB_LOGIN, FILTERS)
-    total = review_needed["issueCount"] + mine["issueCount"]
+    prs = search_pull_requests(GITHUB_LOGIN, FILTERS) + search_outbox_pull_requests(GITHUB_LOGIN, FILTERS) + mine
+    total = len(prs)
 
     _summary(str(total), approved)
-    _print_response(mine)
-    _print_response(review_needed)
-    _print_response(review_completed)
+    _print_prs(prs)
