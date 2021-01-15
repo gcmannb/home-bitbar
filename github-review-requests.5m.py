@@ -145,6 +145,15 @@ def search_pull_requests(login, filters=""):
     return response["data"]["search"]
 
 
+def search_outbox_pull_requests(login, filters=""):
+    search_query = "type:pr state:open reviewed-by:%(login)s %(filters)s" % {
+        "login": login,
+        "filters": filters,
+    }
+    response = execute_query(query % {"search_query": search_query})
+    return response["data"]["search"]
+
+
 def search_my_pull_requests(login, filters=""):
     search_query = "type:pr state:open assignee:%(login)s %(filters)s" % {
         "login": login,
@@ -199,7 +208,7 @@ class PR:
     def print_it(self, prefix=""):
         print_line(prefix + self.title, size=16, href=self.url)
         print_line(prefix + self.subtitle, size=12)
-        print_line("---")
+        print_line(prefix + "---")
 
 
 def _annotate_pr(pr) -> PR:
@@ -269,9 +278,11 @@ if __name__ == "__main__":
         sys.exit(0)
 
     review_needed = search_pull_requests(GITHUB_LOGIN, FILTERS)
+    review_completed = search_outbox_pull_requests(GITHUB_LOGIN, FILTERS)
     mine, approved = search_my_pull_requests(GITHUB_LOGIN, FILTERS)
     total = review_needed["issueCount"] + mine["issueCount"]
 
     _summary(str(total), approved)
     _print_response(mine)
     _print_response(review_needed)
+    _print_response(review_completed)
