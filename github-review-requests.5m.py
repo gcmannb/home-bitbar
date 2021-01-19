@@ -137,28 +137,38 @@ def execute_query(query):
     return json.loads(body)
 
 
-def search_pull_requests(login, filters="") -> List["PR"]:
-    search_query = "type:pr state:open review-requested:%(login)s %(filters)s" % {
-        "login": login,
-        "filters": filters,
+def execute_query_prs(search_query_format) -> List["PR"]:
+    search_query = search_query_format % {
+        "login": GITHUB_LOGIN,
+        "filters": FILTERS,
     }
     response = execute_query(query % {"search_query": search_query})
     return _prs(response)
 
 
-def search_outbox_pull_requests(login, filters="") -> List["PR"]:
-    search_query = "type:pr state:open reviewed-by:%(login)s %(filters)s" % {
-        "login": login,
-        "filters": filters,
-    }
-    response = execute_query(query % {"search_query": search_query})
-    return _prs(response)
+def search_pull_requests() -> List["PR"]:
+    search_query = "type:pr state:open review-requested:%(login)s %(filters)s"
+    return execute_query_prs(search_query)
 
 
-def search_my_pull_requests(login, filters="") -> Tuple[List["PR"], bool]:
+def search_outbox_pull_requests() -> List["PR"]:
+    search_query = "type:pr state:open reviewed-by:%(login)s %(filters)s"
+    return execute_query_prs(search_query)
+
+
+def search_informative_pull_requests() -> List["PR"]:
+    search_query = "type:pr state:open repo:doxo/saba repo:doxo/chestnut %(filters)s"
+    results = execute_query_prs(search_query)
+    for pr in results:
+        pr.in_outbox = True
+
+    return results
+
+
+def search_my_pull_requests() -> Tuple[List["PR"], bool]:
     search_query = "type:pr state:open assignee:%(login)s %(filters)s" % {
-        "login": login,
-        "filters": filters,
+        "login": GITHUB_LOGIN,
+        "filters": FILTERS,
     }
     response = execute_query(query % {"search_query": search_query})
 
@@ -200,16 +210,21 @@ def _summary(issue_count, mine_approved):
 
 
 class PR:
-    def __init__(self, title=None, subtitle=None, in_outbox=None, url=None):
+    def __init__(self, title=None, subtitle=None, in_outbox=None, url=None, author=None):
         self.title = title
         self.subtitle = subtitle
         self.in_outbox = in_outbox
         self.url = url
+        self.author = author
 
     def print_it(self, prefix=""):
         print_line(prefix + self.title, size=16, href=self.url)
         print_line(prefix + self.subtitle, size=12)
         print_line(prefix + "---")
+
+    @property
+    def excluded(self):
+        return self.author == "dependabot-preview"
 
 
 def _annotate_pr(pr) -> PR:
@@ -251,7 +266,7 @@ def _annotate_pr(pr) -> PR:
         pr["headRefName"],
         merge_status,
     )
-    return PR(title, subtitle, in_outbox, pr["url"])
+    return PR(title, subtitle, in_outbox, pr["url"], pr["author"]["login"])
 
 
 def _prs(response):
@@ -260,11 +275,13 @@ def _prs(response):
 
 def _print_prs(items: List[PR]):
     outbox = []
-    for my in items:
-        if not my.in_outbox:
-            my.print_it()
+    for item in items:
+        if item.excluded:
+            continue
+        if not item.in_outbox:
+            item.print_it()
         else:
-            outbox.append(my)
+            outbox.append(item)
 
     if any(outbox):
         print_line("Outbox")
@@ -280,8 +297,14 @@ if __name__ == "__main__":
         print_line("ACCESS_TOKEN and GITHUB_LOGIN cannot be empty")
         sys.exit(0)
 
-    mine, approved = search_my_pull_requests(GITHUB_LOGIN, FILTERS)
-    prs = search_pull_requests(GITHUB_LOGIN, FILTERS) + search_outbox_pull_requests(GITHUB_LOGIN, FILTERS) + mine
+    mine, approved = search_my_pull_requests()
+    prs = mine + search_pull_requests() + search_outbox_pull_requests()
+
+    pr_titles = set([p.title for p in prs])
+    for p in search_informative_pull_requests():
+        if p.title not in pr_titles:
+            prs.append(p)
+            p.title = "(info) " + p.title
     total = len(prs)
 
     _summary(str(total), approved)
