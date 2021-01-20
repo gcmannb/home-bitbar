@@ -284,7 +284,7 @@ def _print_prs(items: List[PR]):
             outbox.append(item)
 
     if any(outbox):
-        print_line("Outbox")
+        print_line("Outbox (%(count)d)" % { "count": len(outbox) })
 
     for my in outbox:
         my.print_it("--")
@@ -298,14 +298,16 @@ if __name__ == "__main__":
         sys.exit(0)
 
     mine, approved = search_my_pull_requests()
-    prs = mine + search_pull_requests() + search_outbox_pull_requests()
+    outbox = search_outbox_pull_requests()
+    assigned_to_me = search_pull_requests()
+    prs = mine + assigned_to_me + outbox
 
     pr_titles = set([p.title for p in prs])
     for p in search_informative_pull_requests():
         if p.title not in pr_titles:
             prs.append(p)
             p.title = "(info) " + p.title
-    total = len(prs)
+    total = len(mine) + len(assigned_to_me)
 
     _summary(str(total), approved)
     _print_prs(prs)
