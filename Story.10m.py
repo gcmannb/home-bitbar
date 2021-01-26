@@ -53,7 +53,7 @@ def execute_query():
         + base64.b64encode(JIRA_AUTH.encode("ascii")).decode(),
         "Content-Type": "application/json",
     }
-    jql = "project=DIR%20AND%20assignee=" + JIRA_USERNAME
+    jql = "(project=PAY%20OR%20project=DIR)%20AND%20assignee=" + JIRA_USERNAME
     req = Request(JIRA_BASE_URL + "/rest/api/3/search?jql=%s" % jql, headers=headers)
     body = urlopen(req).read()
     return json.loads(body)
