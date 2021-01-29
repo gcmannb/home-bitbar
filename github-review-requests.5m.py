@@ -234,12 +234,16 @@ def _annotate_pr(pr) -> PR:
         for review_node in pr["reviews"]["nodes"]
         if review_node["author"]["login"] != GITHUB_LOGIN
     )
-    #
-    in_outbox = any(
+    has_my_activity = any(
         review_node
         for review_node in pr["reviews"]["nodes"]
         if review_node["author"]["login"] == GITHUB_LOGIN
     )
+    approved = _is_approved(pr)
+    approved_by_me = approved and has_my_activity
+    #
+    mine = pr["author"]["login"] == GITHUB_LOGIN
+    in_outbox = approved_by_me and not mine
     statuses = filter(None, [n["commit"]["status"] for n in pr["commits"]["nodes"]])
     failed = any(status for status in statuses if status["state"] == "FAILURE")
     pending = any(status for status in statuses if status["state"] == "PENDING")
@@ -248,7 +252,7 @@ def _annotate_pr(pr) -> PR:
     title_color = colors.get("inactive" if WIP_LABEL in labels else "title")
     subtitle_color = colors.get("inactive" if WIP_LABEL in labels else "subtitle")
 
-    extra = u"🏓" if _is_approved(pr) else u""
+    extra = u"🏓" if approved else u""
     title = u"%s - %s %s" % (pr["repository"]["nameWithOwner"], pr["title"], extra)
     if has_activity:
         title = title + u" 🔸"
