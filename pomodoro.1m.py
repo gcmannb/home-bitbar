@@ -45,10 +45,10 @@ symbols = {
 }
 
 mode = [
-    "break",
-    "break",
     "work",
     "work",
+    "break",
+    "break",
     "regroup",
     "work",
     "work",
