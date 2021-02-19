@@ -22,6 +22,7 @@
 # --------------------
 
 import datetime
+from datetime import timedelta
 import os
 import locale
 import codecs
@@ -62,9 +63,13 @@ def print_line(text, **kwargs):
 def _mode(index):
     return mode[index % len(mode)]
 
+def _time(t):
+    return datetime.datetime.strftime(t, "%H:%M")
+
 if __name__ == "__main__":
     start = datetime.datetime(2021, 1, 1)
-    delta = (datetime.datetime.now() - start).total_seconds()
+    now = datetime.datetime.now()
+    delta = (now - start).total_seconds()
     interval = int(delta / (15*60))
     left = 15 - int((delta / 60) % 15)
 
@@ -80,5 +85,8 @@ if __name__ == "__main__":
     print_line(u"%s %s" % (sym, delta))
     print_line("---")
     print_line("Next:")
+    delta_15_min = timedelta(minutes=15 * 60)
+    tt = now + timedelta(minutes=left)
     for m in range(1, 3):
-        print_line("  %s" % _mode(interval + m))
+        print_line("  %s %s" % (_time(tt), _mode(interval + m)))
+        tt = tt + timedelta(minutes=15)
