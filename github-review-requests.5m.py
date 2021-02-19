@@ -19,6 +19,7 @@ import json
 import os
 import sys
 import codecs
+import re
 import locale
 from typing import List, Tuple
 
@@ -59,6 +60,10 @@ except ImportError:
 
 
 DARK_MODE = os.environ.get("BitBarDarkMode")
+
+SNOOZE_PR_LIST = [
+    "doxo/aspen#2264"
+]
 
 query = """{
   search(query: "%(search_query)s", type: ISSUE, first: 100) {
@@ -173,10 +178,15 @@ def search_my_pull_requests() -> Tuple[List["PR"], bool]:
     response = execute_query(query % {"search_query": search_query})
 
     approved = False
-    for pr in [r["node"] for r in response["data"]["search"]["edges"]]:
+    my_prs = _prs(response)
+
+    for pr in my_prs: # [r["node"] for r in response["data"]["search"]["edges"]]:
+        # Don't track approval on snoozed PRs
+        if pr.key in SNOOZE_PR_LIST:
+            continue
 
         # Consider it my court if the PR's latest commit has a review
-        approved = approved or _is_approved(pr)
+        approved = approved or pr.approved # _is_approved(pr)
 
     return _prs(response), approved
 
@@ -191,15 +201,6 @@ def print_line(text, **kwargs):
     print(u"%s | %s" % (text, params) if kwargs.items() else text)
 
 
-def _is_approved(pr):
-    last_tree = pr["commits"]["nodes"][0]["commit"]["oid"]
-    if len(pr["reviews"]["nodes"]) > 0:
-        return any(
-            [last_tree == n["commit"]["oid"] for n in pr["reviews"]["nodes"]]
-        ) and any(n["state"] != "COMMENTED" for n in pr["reviews"]["nodes"])
-    return False
-
-
 def _summary(issue_count, mine_approved):
     extra = u"🏓" if mine_approved else u""
 
@@ -210,17 +211,82 @@ def _summary(issue_count, mine_approved):
 
 
 class PR:
-    def __init__(self, title=None, subtitle=None, in_outbox=None, url=None, author=None):
+    def __init__(self, title=None, subtitle=None, in_outbox=None, url=None, author=None, approved=False):
         self.title = title
         self.subtitle = subtitle
         self.in_outbox = in_outbox
         self.url = url
         self.author = author
+        self.approved = approved
 
     def print_it(self, prefix=""):
+        snoozed = " (SNOOZED)" if self.key in SNOOZE_PR_LIST else ""
+
         print_line(prefix + self.title, size=16, href=self.url)
-        print_line(prefix + self.subtitle, size=12)
+        print_line(prefix + self.subtitle + snoozed, size=12)
         print_line(prefix + "---")
+
+    @staticmethod
+    def _is_approved(pr):
+        last_tree = pr["commits"]["nodes"][0]["commit"]["oid"]
+        if len(pr["reviews"]["nodes"]) > 0:
+            return any(
+                [last_tree == n["commit"]["oid"] for n in pr["reviews"]["nodes"]]
+            ) and any(n["state"] != "COMMENTED" for n in pr["reviews"]["nodes"])
+        return False
+
+    @staticmethod
+    def annotate(pr) -> "PR":
+        # Have there been comments on this PR (that aren't from me)?
+        has_activity = any(
+            review_node
+            for review_node in pr["reviews"]["nodes"]
+            if review_node["author"]["login"] != GITHUB_LOGIN
+        )
+        has_my_activity = any(
+            review_node
+            for review_node in pr["reviews"]["nodes"]
+            if review_node["author"]["login"] == GITHUB_LOGIN
+        )
+        approved = PR._is_approved(pr)
+        approved_by_me = approved and has_my_activity
+        #
+        mine = pr["author"]["login"] == GITHUB_LOGIN
+        in_outbox = approved_by_me and not mine
+        statuses = filter(None, [n["commit"]["status"] for n in pr["commits"]["nodes"]])
+        failed = any(status for status in statuses if status["state"] == "FAILURE")
+        pending = any(status for status in statuses if status["state"] == "PENDING")
+
+        labels = [l["name"] for l in pr["labels"]["nodes"]]
+        title_color = colors.get("inactive" if WIP_LABEL in labels else "title")
+        subtitle_color = colors.get("inactive" if WIP_LABEL in labels else "subtitle")
+
+        extra = u"🏓" if approved else u""
+        title = u"%s - %s %s" % (pr["repository"]["nameWithOwner"], pr["title"], extra)
+        if has_activity:
+            title = title + u" 🔸"
+        if failed:
+            title = title + u" 🔺"
+        if pending:
+            title = title + u" ▫️"
+
+        merge_status = u" ⚡️" if pr["mergeable"] == "CONFLICTING" else ""
+        subtitle = "#%s opened on %s by @%s%s — %s%s" % (
+            pr["number"],
+            parse_date(pr["createdAt"]),
+            pr["author"]["login"],
+            " (DRAFT)" if pr["isDraft"] else u"",
+            pr["headRefName"],
+            merge_status,
+        )
+        return PR(title, subtitle, in_outbox, pr["url"], pr["author"]["login"], approved)
+
+
+    @property
+    def key(self):
+        result = re.match(r"^https://github.com/(.+)/pull/(\d+)$", self.url)
+        project_key, number = result.groups()
+        return f"{project_key}#{number}"
 
     @property
     def excluded(self):
@@ -228,49 +294,8 @@ class PR:
 
 
 def _annotate_pr(pr) -> PR:
-    # Have there been comments on this PR (that aren't from me)?
-    has_activity = any(
-        review_node
-        for review_node in pr["reviews"]["nodes"]
-        if review_node["author"]["login"] != GITHUB_LOGIN
-    )
-    has_my_activity = any(
-        review_node
-        for review_node in pr["reviews"]["nodes"]
-        if review_node["author"]["login"] == GITHUB_LOGIN
-    )
-    approved = _is_approved(pr)
-    approved_by_me = approved and has_my_activity
-    #
-    mine = pr["author"]["login"] == GITHUB_LOGIN
-    in_outbox = approved_by_me and not mine
-    statuses = filter(None, [n["commit"]["status"] for n in pr["commits"]["nodes"]])
-    failed = any(status for status in statuses if status["state"] == "FAILURE")
-    pending = any(status for status in statuses if status["state"] == "PENDING")
+    return PR.annotate(pr)
 
-    labels = [l["name"] for l in pr["labels"]["nodes"]]
-    title_color = colors.get("inactive" if WIP_LABEL in labels else "title")
-    subtitle_color = colors.get("inactive" if WIP_LABEL in labels else "subtitle")
-
-    extra = u"🏓" if approved else u""
-    title = u"%s - %s %s" % (pr["repository"]["nameWithOwner"], pr["title"], extra)
-    if has_activity:
-        title = title + u" 🔸"
-    if failed:
-        title = title + u" 🔺"
-    if pending:
-        title = title + u" ▫️"
-
-    merge_status = u" ⚡️" if pr["mergeable"] == "CONFLICTING" else ""
-    subtitle = "#%s opened on %s by @%s%s — %s%s" % (
-        pr["number"],
-        parse_date(pr["createdAt"]),
-        pr["author"]["login"],
-        " (DRAFT)" if pr["isDraft"] else u"",
-        pr["headRefName"],
-        merge_status,
-    )
-    return PR(title, subtitle, in_outbox, pr["url"], pr["author"]["login"])
 
 
 def _prs(response):
