@@ -21,6 +21,7 @@ import sys
 import codecs
 import re
 import locale
+import yaml
 from typing import List, Tuple
 
 
@@ -31,8 +32,9 @@ from typing import List, Tuple
 
 from dotenv import load_dotenv
 
+this_directory = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(
-    dotenv_path=os.path.dirname(os.path.abspath(__file__)) + "/.credentials.env"
+    dotenv_path=this_directory + "/.credentials.env"
 )
 
 ACCESS_TOKEN = os.getenv("GITHUB_AUTH_TOKEN")
@@ -60,10 +62,11 @@ except ImportError:
 
 
 DARK_MODE = os.environ.get("BitBarDarkMode")
+CONFIG = yaml.load(open(this_directory + "/.config.yml", "r"), Loader=yaml.SafeLoader)
 
-SNOOZE_PR_LIST = [
-    "doxo/aspen#2264"
-]
+SNOOZE_PR_LIST = CONFIG.get("snooze_prs", [])
+INFORMATIVE_REPO_LIST = CONFIG.get("informative_repos", [])
+FREEZE_FRICTION_LIST = CONFIG.get("freeze_friction", [])
 
 query = """{
   search(query: "%(search_query)s", type: ISSUE, first: 100) {
@@ -162,7 +165,8 @@ def search_outbox_pull_requests() -> List["PR"]:
 
 
 def search_informative_pull_requests() -> List["PR"]:
-    search_query = "type:pr state:open repo:doxo/saba repo:doxo/chestnut %(filters)s"
+    repos = " ".join([f"repo:{s}" for s in INFORMATIVE_REPO_LIST])
+    search_query = f"type:pr state:open {repos} %(filters)s"
     results = execute_query_prs(search_query)
     for pr in results:
         pr.in_outbox = True
@@ -189,8 +193,8 @@ def search_for_freeze_pull_requests():
       }
     }"""
     frozen = []
-    for repo in ["saba", "aspen", "chestnut"]:
-        search_query = f"type:pr state:open repo:doxo/{repo} base:hotfix"
+    for repo in FREEZE_FRICTION_LIST:
+        search_query = f"type:pr state:open repo:{repo} base:hotfix"
     
         response = execute_query(query % {"search_query": search_query})
         if any(response["data"]["search"]["edges"]):
