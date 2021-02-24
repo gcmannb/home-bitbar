@@ -170,6 +170,41 @@ def search_informative_pull_requests() -> List["PR"]:
     return results
 
 
+def search_for_freeze_pull_requests():
+    search_query_format = """{
+      search(query: "%(search_query)s", type: ISSUE, first: 20) {
+        edges {
+          node {
+            ... on PullRequest {
+              repository {
+                nameWithOwner
+              }
+              author {
+                login
+              }
+              createdAt
+            }
+          }
+        }
+      }
+    }"""
+    frozen = []
+    for repo in ["saba", "aspen", "chestnut"]:
+        search_query = f"type:pr state:open repo:doxo/{repo} base:hotfix"
+    
+        response = execute_query(query % {"search_query": search_query})
+        if any(response["data"]["search"]["edges"]):
+            frozen.append(repo)
+    if any(frozen):
+        print_line(
+            "Frozen from merging: "
+        )
+        print_line(
+            ",".join(frozen)
+        )
+        print_line("---")
+
+
 def search_my_pull_requests() -> Tuple[List["PR"], bool]:
     search_query = "type:pr state:open assignee:%(login)s %(filters)s" % {
         "login": GITHUB_LOGIN,
@@ -339,4 +374,5 @@ if __name__ == "__main__":
     total = len(mine) + len(assigned_to_me)
 
     _summary(str(total), approved)
+    search_for_freeze_pull_requests()
     _print_prs(prs)
