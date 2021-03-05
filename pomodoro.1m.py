@@ -87,6 +87,9 @@ if __name__ == "__main__":
     print_line("Next:")
     delta_15_min = timedelta(minutes=15 * 60)
     tt = now + timedelta(minutes=left)
-    for m in range(1, 3):
-        print_line("  %s %s" % (_time(tt), _mode(interval + m)))
+    for m in range(1, 8):
+        start_time = _time(tt)
+        if start_time > "18:00":
+            continue
+        print_line("  %s %s" % (start_time, _mode(interval + m)))
         tt = tt + timedelta(minutes=15)
