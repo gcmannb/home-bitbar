@@ -126,7 +126,7 @@ query = """{
 
 
 colors = {
-    "inactive": "#b4b4b4",
+    "inactive": "#666666",
     "title": "#ffffff" if DARK_MODE else "#000000",
     "subtitle": "#586069",
 }
@@ -204,7 +204,7 @@ def search_for_freeze_pull_requests():
             "Frozen from merging: "
         )
         print_line(
-            ",".join(frozen)
+            ", ".join(frozen)
         )
         print_line("---")
 
@@ -250,19 +250,27 @@ def _summary(issue_count, mine_approved):
 
 
 class PR:
-    def __init__(self, title=None, subtitle=None, in_outbox=None, url=None, author=None, approved=False):
+    def __init__(self, title=None, subtitle=None, in_outbox=None, url=None, author=None, approved=False, labels=[]):
         self.title = title
         self.subtitle = subtitle
         self.in_outbox = in_outbox
         self.url = url
         self.author = author
         self.approved = approved
+        self.labels = labels
+
+    @property
+    def snoozed(self):
+        return self.key in SNOOZE_PR_LIST
 
     def print_it(self, prefix=""):
-        snoozed = " (SNOOZED)" if self.key in SNOOZE_PR_LIST else ""
+        snoozed = " (SNOOZED)" if self.snoozed else ""
+        inactive = (WIP_LABEL in self.labels) or snoozed
+        title_color = colors.get("inactive" if inactive else "title")
+        subtitle_color = colors.get("inactive" if inactive else "subtitle")
 
-        print_line(prefix + self.title, size=16, href=self.url)
-        print_line(prefix + self.subtitle + snoozed, size=12)
+        print_line(prefix + self.title, color=title_color, size=16, href=self.url)
+        print_line(prefix + self.subtitle + snoozed, color=subtitle_color, size=12)
         print_line(prefix + "---")
 
     @staticmethod
@@ -297,8 +305,6 @@ class PR:
         pending = any(status for status in statuses if status["state"] == "PENDING")
 
         labels = [l["name"] for l in pr["labels"]["nodes"]]
-        title_color = colors.get("inactive" if WIP_LABEL in labels else "title")
-        subtitle_color = colors.get("inactive" if WIP_LABEL in labels else "subtitle")
 
         extra = u"🏓" if approved else u""
         title = u"%s - %s %s" % (pr["repository"]["nameWithOwner"], pr["title"], extra)
@@ -318,7 +324,7 @@ class PR:
             pr["headRefName"],
             merge_status,
         )
-        return PR(title, subtitle, in_outbox, pr["url"], pr["author"]["login"], approved)
+        return PR(title, subtitle, in_outbox, pr["url"], pr["author"]["login"], approved, labels)
 
 
     @property
@@ -343,19 +349,31 @@ def _prs(response):
 
 def _print_prs(items: List[PR]):
     outbox = []
+    snoozed_items = []
     for item in items:
         if item.excluded:
             continue
-        if not item.in_outbox:
+
+        if item.snoozed:
+            snoozed_items.append(item)
+        elif not item.in_outbox:
             item.print_it()
         else:
             outbox.append(item)
+
+    for item in snoozed_items:
+        item.print_it()
+
 
     if any(outbox):
         print_line("Outbox (%(count)d)" % { "count": len(outbox) })
 
     for my in outbox:
         my.print_it("--")
+
+
+def _actual_count(items: List[PR]) -> int:
+    return len([i for i in items if not i.snoozed])
 
 
 if __name__ == "__main__":
@@ -375,7 +393,7 @@ if __name__ == "__main__":
         if p.title not in pr_titles:
             prs.append(p)
             p.title = "(info) " + p.title
-    total = len(mine) + len(assigned_to_me)
+    total = _actual_count(mine) + _actual_count(assigned_to_me)
 
     _summary(str(total), approved)
     search_for_freeze_pull_requests()
