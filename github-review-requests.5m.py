@@ -33,9 +33,7 @@ from typing import List, Tuple
 from dotenv import load_dotenv
 
 this_directory = os.path.dirname(os.path.abspath(__file__))
-load_dotenv(
-    dotenv_path=this_directory + "/.credentials.env"
-)
+load_dotenv(dotenv_path=this_directory + "/.credentials.env")
 
 ACCESS_TOKEN = os.getenv("GITHUB_AUTH_TOKEN")
 GITHUB_LOGIN = os.getenv("GITHUB_USERNAME")
@@ -195,17 +193,13 @@ def search_for_freeze_pull_requests():
     frozen = []
     for repo in FREEZE_FRICTION_LIST:
         search_query = f"type:pr state:open repo:{repo} base:hotfix"
-    
+
         response = execute_query(query % {"search_query": search_query})
         if any(response["data"]["search"]["edges"]):
             frozen.append(repo)
     if any(frozen):
-        print_line(
-            "Frozen from merging: "
-        )
-        print_line(
-            ", ".join(frozen)
-        )
+        print_line("Frozen from merging: ")
+        print_line(", ".join(frozen))
         print_line("---")
 
 
@@ -219,13 +213,13 @@ def search_my_pull_requests() -> Tuple[List["PR"], bool]:
     approved = False
     my_prs = _prs(response)
 
-    for pr in my_prs: # [r["node"] for r in response["data"]["search"]["edges"]]:
+    for pr in my_prs:  # [r["node"] for r in response["data"]["search"]["edges"]]:
         # Don't track approval on snoozed PRs
         if pr.key in SNOOZE_PR_LIST:
             continue
 
         # Consider it my court if the PR's latest commit has a review
-        approved = approved or pr.approved # _is_approved(pr)
+        approved = approved or pr.approved  # _is_approved(pr)
 
     return _prs(response), approved
 
@@ -236,21 +230,30 @@ def parse_date(text):
 
 
 def print_line(text, **kwargs):
-    params = u" ".join([u"%s=%s" % (key, value) for key, value in kwargs.items()])
-    print(u"%s | %s" % (text, params) if kwargs.items() else text)
+    params = " ".join(["%s=%s" % (key, value) for key, value in kwargs.items()])
+    print("%s | %s" % (text, params) if kwargs.items() else text)
 
 
 def _summary(issue_count, mine_approved):
-    extra = u"🏓" if mine_approved else u""
+    extra = "🏓" if mine_approved else ""
 
     print_line(
-        u"#%(issue_count)s %(extra)s" % {"issue_count": issue_count, "extra": extra}
+        "#%(issue_count)s %(extra)s" % {"issue_count": issue_count, "extra": extra}
     )
     print_line("---")
 
 
 class PR:
-    def __init__(self, title=None, subtitle=None, in_outbox=None, url=None, author=None, approved=False, labels=[]):
+    def __init__(
+        self,
+        title=None,
+        subtitle=None,
+        in_outbox=None,
+        url=None,
+        author=None,
+        approved=False,
+        labels=[],
+    ):
         self.title = title
         self.subtitle = subtitle
         self.in_outbox = in_outbox
@@ -306,26 +309,33 @@ class PR:
 
         labels = [l["name"] for l in pr["labels"]["nodes"]]
 
-        extra = u"🏓" if approved else u""
-        title = u"%s - %s %s" % (pr["repository"]["nameWithOwner"], pr["title"], extra)
+        extra = "🏓" if approved else ""
+        title = "%s - %s %s" % (pr["repository"]["nameWithOwner"], pr["title"], extra)
         if has_activity:
-            title = title + u" 🔸"
+            title = title + " 🔸"
         if failed:
-            title = title + u" 🔺"
+            title = title + " 🔺"
         if pending:
-            title = title + u" ▫️"
+            title = title + " ▫️"
 
-        merge_status = u" ⚡️" if pr["mergeable"] == "CONFLICTING" else ""
+        merge_status = " ⚡️" if pr["mergeable"] == "CONFLICTING" else ""
         subtitle = "#%s opened on %s by @%s%s — %s%s" % (
             pr["number"],
             parse_date(pr["createdAt"]),
             pr["author"]["login"],
-            " (DRAFT)" if pr["isDraft"] else u"",
+            " (DRAFT)" if pr["isDraft"] else "",
             pr["headRefName"],
             merge_status,
         )
-        return PR(title, subtitle, in_outbox, pr["url"], pr["author"]["login"], approved, labels)
-
+        return PR(
+            title,
+            subtitle,
+            in_outbox,
+            pr["url"],
+            pr["author"]["login"],
+            approved,
+            labels,
+        )
 
     @property
     def key(self):
@@ -335,12 +345,11 @@ class PR:
 
     @property
     def excluded(self):
-        return self.author == "dependabot-preview"
+        return self.author in ["dependabot", "dependabot-preview"]
 
 
 def _annotate_pr(pr) -> PR:
     return PR.annotate(pr)
-
 
 
 def _prs(response):
@@ -364,9 +373,8 @@ def _print_prs(items: List[PR]):
     for item in snoozed_items:
         item.print_it()
 
-
     if any(outbox):
-        print_line("Outbox (%(count)d)" % { "count": len(outbox) })
+        print_line("Outbox (%(count)d)" % {"count": len(outbox)})
 
     for my in outbox:
         my.print_it("--")
