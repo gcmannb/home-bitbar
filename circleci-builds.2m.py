@@ -65,43 +65,61 @@ def execute_query():
 
 
 def print_line(text, **kwargs):
-    params = u" ".join([u"%s=%s" % (key, value) for key, value in kwargs.items()])
-    print(u"%s | %s" % (text, params) if kwargs.items() else text)
+    params = " ".join(["%s=%s" % (key, value) for key, value in kwargs.items()])
+    print("%s | %s" % (text, params) if kwargs.items() else text)
 
 
 def _summarize(builds):
     build_count = len([b for b in builds if b["status"] == "running"])
-    print_line(u"🚧 %(build_count)s" % {"build_count": build_count})
+    any_failures = "🔺" if any([b for b in builds if b["status"] == "failed"]) else ""
+    print_line(
+        "🚧 %(build_count)s %(any_failures)s"
+        % {"build_count": build_count, "any_failures": any_failures}
+    )
     print_line("---")
 
 
 def _print_details(builds):
-    for branch, branch_grouping in _sorted_then_grouped(builds, key=lambda i: i["branch"]):
+    for branch, branch_grouping in _sorted_then_grouped(
+        builds, key=lambda i: i["branch"]
+    ):
         print_line(branch_grouping[0]["reponame"].upper(), size=10)
         print_line(branch)
-        for job, job_grouping in _sorted_then_grouped(branch_grouping, key=lambda i: i["workflows"]["job_name"]):
-            for b in sorted(job_grouping, reverse=True, key=lambda i: (i.get("committer_date") or ""))[0:1]:
+        for job, job_grouping in _sorted_then_grouped(
+            branch_grouping, key=lambda i: i["workflows"]["job_name"]
+        ):
+            for b in sorted(
+                job_grouping,
+                reverse=True,
+                key=lambda i: (i.get("committer_date") or ""),
+            )[0:1]:
                 args = dict(**b)
                 args["job_name"] = b["workflows"]["job_name"]
                 args["outcome"] = _map_outcome(args["outcome"])
                 args["ago"] = pretty_date(b.get("committer_date"))
-                print_line(u"  %(job_name)s: %(status)s %(outcome)s %(ago)s" % args, trim=False, href=args["build_url"])
+                print_line(
+                    "  %(job_name)s: %(status)s %(outcome)s %(ago)s" % args,
+                    trim=False,
+                    href=args["build_url"],
+                )
         print_line("---")
 
 
 def _sorted_then_grouped(items, key=None):
     return [(k, list(g)) for k, g in groupby(sorted(list(items), key=key), key=key)]
 
+
 def _map_outcome(status):
     if status == "success":
-        return u"✅"
+        return "✅"
     if status == "failed":
-        return u"❌"
+        return "❌"
     return status
+
 
 def pretty_date(time_str=False):
     if time_str is None:
-        return ''
+        return ""
 
     time = datetime.fromisoformat(time_str[:-1])
     now = datetime.now()
@@ -110,7 +128,7 @@ def pretty_date(time_str=False):
     day_diff = diff.days
 
     if day_diff < 0:
-        return ''
+        return ""
 
     if day_diff == 0:
         if second_diff < 10:
