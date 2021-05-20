@@ -71,12 +71,28 @@ def print_line(text, **kwargs):
 
 def _summarize(builds):
     build_count = len([b for b in builds if b["status"] == "running"])
-    any_failures = "🔺" if any([b for b in builds if b["status"] == "failed"]) else ""
+    any_failures = "🔺" if any(_recent_failures(builds)) else ""
     print_line(
         "🚧 %(build_count)s %(any_failures)s"
         % {"build_count": build_count, "any_failures": any_failures}
     )
     print_line("---")
+
+
+def _recent_failures(builds):
+    for branch, branch_grouping in _sorted_then_grouped(
+        builds, key=lambda i: i["branch"]
+    ):
+        for job, job_grouping in _sorted_then_grouped(
+            branch_grouping, key=lambda i: i["workflows"]["job_name"]
+        ):
+            for b in sorted(
+                job_grouping,
+                reverse=True,
+                key=lambda i: (i.get("committer_date") or ""),
+            )[0:1]:
+                if b["status"] == "failed":
+                    yield b
 
 
 def _print_details(builds):
