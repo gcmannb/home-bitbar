@@ -20,6 +20,7 @@ import os
 import sys
 import codecs
 import re
+import subprocess
 import locale
 import yaml
 from typing import List, Tuple
@@ -64,6 +65,7 @@ CONFIG = yaml.load(open(this_directory + "/.config.yml", "r"), Loader=yaml.SafeL
 
 SNOOZE_PR_LIST = CONFIG.get("snooze_prs", [])
 INFORMATIVE_REPO_LIST = CONFIG.get("informative_repos", [])
+ACTIVE_REPO_LIST = CONFIG.get("active_repos", [])
 FREEZE_FRICTION_LIST = CONFIG.get("freeze_friction", [])
 
 query = """{
@@ -154,7 +156,35 @@ def execute_query_prs(search_query_format) -> List["PR"]:
 
 def search_pull_requests() -> List["PR"]:
     search_query = "type:pr state:open review-requested:%(login)s %(filters)s"
-    return execute_query_prs(search_query)
+    return _cli_execute_prs(search_query)
+
+
+def _cli_execute_prs(search_query_format) -> List["PR"]:
+    def _generator(query):
+        query = query % {
+            "login": GITHUB_LOGIN,
+            "filters": FILTERS,
+        }
+
+        for repo in ACTIVE_REPO_LIST:
+            proc = subprocess.run(
+                f'/usr/local/bin/gh pr list -R "{repo}" --search "{query}" --json "title,isDraft,author,url"',
+                shell=True,
+                capture_output=True,
+            )
+            for item in json.loads(proc.stdout):
+                yield PR(
+                    repository="❯ " + repo,
+                    title=item["title"],
+                    subtitle="",
+                    in_outbox=False,
+                    url=item["url"],
+                    author=item["author"],
+                    approved=False,
+                    labels=[],
+                )
+
+    return [p for p in _generator(search_query_format)]
 
 
 def search_outbox_pull_requests() -> List["PR"]:
@@ -246,6 +276,7 @@ def _summary(issue_count, mine_approved):
 class PR:
     def __init__(
         self,
+        repository=None,
         title=None,
         subtitle=None,
         in_outbox=None,
@@ -254,6 +285,7 @@ class PR:
         approved=False,
         labels=[],
     ):
+        self.repository = repository
         self.title = title
         self.subtitle = subtitle
         self.in_outbox = in_outbox
@@ -272,7 +304,12 @@ class PR:
         title_color = colors.get("inactive" if inactive else "title")
         subtitle_color = colors.get("inactive" if inactive else "subtitle")
 
-        print_line(prefix + self.title, color=title_color, size=16, href=self.url)
+        print_line(
+            prefix + "%s - %s" % (self.repository, self.title),
+            color=title_color,
+            size=16,
+            href=self.url,
+        )
         print_line(prefix + self.subtitle + snoozed, color=subtitle_color, size=12)
         print_line(prefix + "---")
 
@@ -308,9 +345,10 @@ class PR:
         pending = any(status for status in statuses if status["state"] == "PENDING")
 
         labels = [l["name"] for l in pr["labels"]["nodes"]]
+        repository = pr["repository"]["nameWithOwner"]
 
         extra = "🏓" if approved else ""
-        title = "%s - %s %s" % (pr["repository"]["nameWithOwner"], pr["title"], extra)
+        title = "%s %s" % (pr["title"], extra)
         if has_activity:
             title = title + " 🔸"
         if failed:
@@ -328,6 +366,7 @@ class PR:
             merge_status,
         )
         return PR(
+            repository,
             title,
             subtitle,
             in_outbox,
