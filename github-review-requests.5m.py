@@ -168,20 +168,25 @@ def _cli_execute_prs(search_query_format) -> List["PR"]:
 
         for repo in ACTIVE_REPO_LIST:
             proc = subprocess.run(
-                f'/usr/local/bin/gh pr list -R "{repo}" --search "{query}" --json "title,isDraft,author,url"',
+                f'/usr/local/bin/gh pr list -L 20 -R "{repo}" --search "{query}" --json "title,isDraft,author,url,createdAt,headRefName,mergeable,reviewDecision"',
                 shell=True,
                 capture_output=True,
             )
             for item in json.loads(proc.stdout):
+                approved = item["reviewDecision"] == "APPROVED"
                 yield PR(
-                    repository="❯ " + repo,
-                    title=item["title"],
-                    subtitle="",
+                    approved=approved,
+                    author=item["author"]["login"],
+                    created_at=parse_date(item["createdAt"]),
+                    head_ref_name=item["headRefName"],
                     in_outbox=False,
-                    url=item["url"],
-                    author=item["author"],
-                    approved=False,
+                    is_draft=item["isDraft"],
                     labels=[],
+                    merge_status=item["mergeable"],
+                    number=None,
+                    repository=repo,
+                    title=item["title"],
+                    url=item["url"],
                 )
 
     return [p for p in _generator(search_query_format)]
@@ -189,13 +194,13 @@ def _cli_execute_prs(search_query_format) -> List["PR"]:
 
 def search_outbox_pull_requests() -> List["PR"]:
     search_query = "type:pr state:open reviewed-by:%(login)s %(filters)s"
-    return execute_query_prs(search_query)
+    return _cli_execute_prs(search_query)
 
 
 def search_informative_pull_requests() -> List["PR"]:
-    repos = " ".join([f"repo:{s}" for s in INFORMATIVE_REPO_LIST])
-    search_query = f"type:pr state:open {repos} %(filters)s"
-    results = execute_query_prs(search_query)
+    search_query = f"type:pr state:open %(filters)s"
+    results = _cli_execute_prs(search_query)
+
     for pr in results:
         pr.in_outbox = True
 
@@ -278,25 +283,53 @@ class PR:
         self,
         repository=None,
         title=None,
-        subtitle=None,
+        number=None,
         in_outbox=None,
         url=None,
         author=None,
         approved=False,
+        is_draft=False,
         labels=[],
+        created_at=None,
+        head_ref_name=None,
+        merge_status=None,
     ):
         self.repository = repository
         self.title = title
-        self.subtitle = subtitle
+        self.created_at = created_at
         self.in_outbox = in_outbox
         self.url = url
         self.author = author
         self.approved = approved
         self.labels = labels
+        self.number = number
+        self.is_draft = is_draft
+        self.head_ref_name = head_ref_name
+        self.merge_status = merge_status
 
     @property
     def snoozed(self):
         return self.key in SNOOZE_PR_LIST
+
+    @property
+    def badges(self):
+        result = []
+        if self.approved:
+            result.append("🏓")
+
+        return ' '.join(result)
+
+    @property
+    def subtitle(self):
+        merge_status = " ⚡️" if self.merge_status == "CONFLICTING" else ""
+        return "#%s opened on %s by @%s%s — %s%s" % (
+            self.number,
+            self.created_at,
+            self.author,
+            " (DRAFT)" if self.is_draft else "",
+            self.head_ref_name,
+            merge_status,
+        )
 
     def print_it(self, prefix=""):
         snoozed = " (SNOOZED)" if self.snoozed else ""
@@ -305,7 +338,7 @@ class PR:
         subtitle_color = colors.get("inactive" if inactive else "subtitle")
 
         print_line(
-            prefix + "%s - %s" % (self.repository, self.title),
+            prefix + "%s — %s %s" % (self.repository, self.title, self.badges),
             color=title_color,
             size=16,
             href=self.url,
@@ -356,24 +389,19 @@ class PR:
         if pending:
             title = title + " ▫️"
 
-        merge_status = " ⚡️" if pr["mergeable"] == "CONFLICTING" else ""
-        subtitle = "#%s opened on %s by @%s%s — %s%s" % (
-            pr["number"],
-            parse_date(pr["createdAt"]),
-            pr["author"]["login"],
-            " (DRAFT)" if pr["isDraft"] else "",
-            pr["headRefName"],
-            merge_status,
-        )
         return PR(
-            repository,
-            title,
-            subtitle,
-            in_outbox,
-            pr["url"],
-            pr["author"]["login"],
-            approved,
-            labels,
+            repository=repository,
+            title=title,
+            number=pr["number"],
+            in_outbox=in_outbox,
+            url=pr["url"],
+            author=pr["author"]["login"],
+            is_draft=pr["isDraft"],
+            approved=approved,
+            labels=labels,
+            created_at=parse_date(pr["createdAt"]),
+            head_ref_name=pr["headRefName"],
+            merge_status=pr["mergeable"],
         )
 
     @property
