@@ -64,7 +64,7 @@ def _mode(index):
     return mode[index % len(mode)]
 
 def _time(t):
-    return datetime.datetime.strftime(t, "%H:%M")
+    return datetime.datetime.strftime(t, "%I:%M %p")
 
 if __name__ == "__main__":
     start = datetime.datetime(2021, 1, 1)
