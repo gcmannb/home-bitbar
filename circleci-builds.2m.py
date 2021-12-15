@@ -47,6 +47,25 @@ colors = {
 }
 
 
+class Build(object):
+    def __init__(self, **kwargs):
+        self.status = kwargs["status"]
+        self.branch = kwargs["branch"]
+        self.reponame = kwargs["reponame"]
+        self.job_name = kwargs["workflows"]["job_name"]
+        self.committer_date = kwargs.get("committer_date") or ""
+        self.build_url = kwargs["build_url"]
+        self.outcome = kwargs["outcome"]
+
+    @property
+    def is_running(self):
+        return self.status == "running"
+
+    @property
+    def is_failed(self):
+        return self.status == "failed"
+
+
 def execute_query():
     headers = {"Accept": "application/json"}
     data = {
@@ -60,8 +79,12 @@ def execute_query():
     )
     body = urlopen(req).read()
     result = json.loads(body)
-    result = [b for b in result if b["user"]["login"] == "gcmannb"]
+    result = [Build(**b) for b in result if b["user"]["login"] == "gcmannb"]
     return result
+
+
+def execute_gh_query():
+    "gh api /repos/doxo/betula/commits/master/status | jq .state -"
 
 
 def print_line(text, **kwargs):
@@ -70,7 +93,7 @@ def print_line(text, **kwargs):
 
 
 def _summarize(builds):
-    build_count = len([b for b in builds if b["status"] == "running"])
+    build_count = len([b for b in builds if b.is_running])
     any_failures = "🔺" if any(_recent_failures(builds)) else ""
     print_line(
         "🚧 %(build_count)s %(any_failures)s"
@@ -80,43 +103,40 @@ def _summarize(builds):
 
 
 def _recent_failures(builds):
-    for branch, branch_grouping in _sorted_then_grouped(
-        builds, key=lambda i: i["branch"]
-    ):
+    for branch, branch_grouping in _sorted_then_grouped(builds, key=lambda i: i.branch):
         for job, job_grouping in _sorted_then_grouped(
-            branch_grouping, key=lambda i: i["workflows"]["job_name"]
+            branch_grouping, key=lambda i: i.job_name
         ):
             for b in sorted(
                 job_grouping,
                 reverse=True,
-                key=lambda i: (i.get("committer_date") or ""),
+                key=lambda i: (i.committer_date),
             )[0:1]:
-                if b["status"] == "failed":
+                if b.is_failed:
                     yield b
 
 
 def _print_details(builds):
-    for branch, branch_grouping in _sorted_then_grouped(
-        builds, key=lambda i: i["branch"]
-    ):
-        print_line(branch_grouping[0]["reponame"].upper(), size=10)
+    for branch, branch_grouping in _sorted_then_grouped(builds, key=lambda i: i.branch):
+        print_line(branch_grouping[0].reponame.upper(), size=10)
         print_line(branch)
         for job, job_grouping in _sorted_then_grouped(
-            branch_grouping, key=lambda i: i["workflows"]["job_name"]
+            branch_grouping, key=lambda i: i.job_name
         ):
             for b in sorted(
                 job_grouping,
                 reverse=True,
-                key=lambda i: (i.get("committer_date") or ""),
+                key=lambda i: (i.committer_date),
             )[0:1]:
-                args = dict(**b)
-                args["job_name"] = b["workflows"]["job_name"]
-                args["outcome"] = _map_outcome(args["outcome"])
-                args["ago"] = pretty_date(b.get("committer_date"))
+                args = dict()
+                args["status"] = b.status
+                args["job_name"] = b.job_name
+                args["outcome"] = _map_outcome(b.outcome)
+                args["ago"] = pretty_date(b.committer_date)
                 print_line(
                     "  %(job_name)s: %(status)s %(outcome)s %(ago)s" % args,
                     trim=False,
-                    href=args["build_url"],
+                    href=b.build_url,
                 )
         print_line("---")
 
