@@ -56,21 +56,25 @@ mode = [
     "regroup",
 ]
 
+
 def print_line(text, **kwargs):
     params = u" ".join([u"%s=%s" % (key, value) for key, value in kwargs.items()])
     print(u"%s | %s" % (text, params) if kwargs.items() else text)
 
+
 def _mode(index):
     return mode[index % len(mode)]
 
+
 def _time(t):
     return datetime.datetime.strftime(t, "%I:%M %p")
+
 
 if __name__ == "__main__":
     start = datetime.datetime(2021, 1, 1)
     now = datetime.datetime.now()
     delta = (now - start).total_seconds()
-    interval = int(delta / (15*60))
+    interval = int(delta / (15 * 60))
     left = 15 - int((delta / 60) % 15)
 
     current_mode = _mode(interval)

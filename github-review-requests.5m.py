@@ -317,7 +317,7 @@ class PR:
         if self.approved:
             result.append("🏓")
 
-        return ' '.join(result)
+        return " ".join(result)
 
     @property
     def subtitle(self):
