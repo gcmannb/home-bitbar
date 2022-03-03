@@ -154,7 +154,7 @@ def _map_outcome(status):
 
 
 def pretty_date(time_str=False):
-    if time_str is None:
+    if not time_str:
         return ""
 
     time = datetime.fromisoformat(time_str[:-1])
