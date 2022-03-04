@@ -49,7 +49,7 @@ if __name__ == "__main__":
 
     output_type = "?"
 
-    if ans.startswith("MDR"):
+    if ans.startswith("ATH"):
         output_type = "🎧"
     elif ans.startswith("BenQ"):
         output_type = "🖥"
