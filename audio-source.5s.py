@@ -1,4 +1,4 @@
-#!/usr/bin/env -S PATH="${PATH}:/usr/local/opt/python@3.8/bin" python3
+#!/usr/bin/env -S PATH="${PATH}:/usr/local/opt/python@3.8/bin" python3.8
 
 # -*- coding: utf-8 -*-
 

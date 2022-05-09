@@ -1,4 +1,4 @@
-#!/usr/bin/env LC_ALL=en_US.UTF-8 python
+#!/usr/bin/env -S PATH="${PATH}:/usr/local/opt/python@3.9/bin" python3.9
 # -*- coding: utf-8 -*-
 
 # Pomodoro status
@@ -29,7 +29,6 @@ import codecs
 import random
 import sys
 
-sys.stdout = codecs.getwriter(locale.getpreferredencoding())(sys.stdout)
 
 DARK_MODE = os.environ.get("BitBarDarkMode")
 
